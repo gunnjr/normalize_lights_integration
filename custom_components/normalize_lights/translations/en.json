@@ -1,0 +1,11 @@
+{
+  "title": "Normalize Lights",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Add a normalized proxy light",
+        "description": "Create a proxy for a real light to normalize brightness behavior."
+      }
+    }
+  }
+}
