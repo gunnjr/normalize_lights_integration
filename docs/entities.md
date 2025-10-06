@@ -4,6 +4,7 @@
 This document defines the public behavior of entities exposed by the **Normalize Lights** integration.
 
 ## 1. Proxy Light (per fixture)
+
 **Domain:** `light`  
 **Color modes:** `{ brightness }` (v1)  
 **Supported services/kwargs:**
@@ -22,6 +23,7 @@ This document defines the public behavior of entities exposed by the **Normalize
 **Edge cases:** if off and step > 0, turns on at computed brightness; step < 0 while off → no‑op (documented).
 
 ## 2. Room Light (optional)
+
 **Domain:** `light`  
 **Members:** list of Proxy Lights.  
 **Aggregation:** v1 default = last‑set; (future: median/min/mean).
