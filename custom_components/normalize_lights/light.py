@@ -1,6 +1,5 @@
 # custom_components/normalize_lights/light.py
-import logging
-_LOGGER = logging.getLogger(__name__)
+import logging _LOGGER = logging.getLogger(__name__)
 
 from __future__ import annotations
 
