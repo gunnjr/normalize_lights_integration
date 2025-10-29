@@ -1,11 +1,26 @@
 {
-  "title": "Normalize Lights",
   "config": {
     "step": {
       "user": {
-        "title": "Add a normalized proxy light",
-        "description": "Create a proxy for a real light to normalize brightness behavior."
+        "title": "Create a Proxy Light",
+        "description": "Configure a Normalize Lights proxy for an existing light.",
+        "data": {
+          "name": "Proxy Name",
+          "target": "Target Light Entity ID",
+          "llv": "Lowest Visible Level",
+          "hld": "Highest Dimmed Level",
+          "profile": "Profile"
+        }
       }
+    },
+    "error": {
+      "llv_gt_hld": "Lowest level must be less than or equal to highest level.",
+      "target_in_use": "That target light already has a proxy defined.",
+      "bad_level": "Enter a percentage (e.g., 35 or 35%) or a raw value 0–255."
+    },
+    "create_entry": {
+      "default": "Proxy created successfully!"
     }
   }
 }
+
