@@ -202,3 +202,14 @@ async def async_setup_platform(hass, config, async_add_entities, discovery_info=
         [NormalizeProxyLight(hass, name, target, llv, hld, profile)],
         update_before_add=False
     )
+ 
+# Platform-level setup function.
+# Home Assistant calls this automatically when a ConfigEntry for this integration is added or reloaded.
+# It should instantiate and register NormalizeProxyLight entities based on entry data.    
+async def async_setup_entry(hass, entry, async_add_entities):
+    data = entry.data | entry.options
+    name = data.get("name")
+    target = data.get("target")
+    llv = data.get("llv")
+    hld = data.get("hld")
+    async_add_entities([NormalizeProxyLight(hass, name, target, llv, hld)])

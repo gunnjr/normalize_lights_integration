@@ -6,5 +6,6 @@
   "issue_tracker": "https://github.com/gunnjr/normalize_lights_integration/issues",
   "codeowners": ["@gunnjr"],
   "requirements": [],
-  "iot_class": "local_push"
+  "iot_class": "local_push",
+  "config_flow": true
 }
