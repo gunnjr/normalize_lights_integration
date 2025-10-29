@@ -30,6 +30,14 @@ def _clamp(n: Optional[int]) -> int:
         n = 0
     return max(0, min(255, n))
 
+# helper to ensure clean read from config file
+def _as_int_or_none(v):
+    if v is None:
+        return None  # nothing was provided in YAML
+    try:
+        return int(v)  # convert cleanly (handles "20" -> 20)
+    except (TypeError, ValueError):
+        return None  # if it's not a valid integer, ignore it
 
 class NormalizeProxyLight(LightEntity):
     """A virtual light that proxies another light and mirrors its state (IMT)."""
@@ -38,7 +46,8 @@ class NormalizeProxyLight(LightEntity):
     _attr_color_mode = ColorMode.BRIGHTNESS
     _attr_should_poll = False
 
-    def __init__(self, hass: HomeAssistant, name: str, target_entity: str) -> None:
+
+    def __init__(self, hass, name, target_entity, llv=None, hld=None, profile="linear") -> None:
         self.hass = hass
         self._attr_name = name
         self._target_entity_id = target_entity
@@ -47,6 +56,9 @@ class NormalizeProxyLight(LightEntity):
         self._unsub_target = None
         # Stable unique_id prevents duplicate orphaned entities on rename
         self._attr_unique_id = f"{DOMAIN}:{self._target_entity_id}"
+        self._llv = llv
+        self._hld = hld
+        self._profile = profile
 
     # ---- HA properties ----
     @property
@@ -104,7 +116,7 @@ class NormalizeProxyLight(LightEntity):
             v = _clamp(v + step)
 
         # IMT identity transform
-        a = virtual_to_actual(v)
+        a = virtual_to_actual(v, self._llv, self._hld, self._profile)
         if a == 0:
             a = 1  # ensure we turn the light on
 
@@ -161,7 +173,7 @@ class NormalizeProxyLight(LightEntity):
             self._virtual_brightness = 255 if is_on else 0
             return
 
-        v = actual_to_virtual(a)
+        v = actual_to_virtual(a, self._llv, self._hld, self._profile)
         self._virtual_brightness = v
 
 
@@ -173,7 +185,20 @@ def setup_platform(hass, config, add_entities, discovery_info=None):
 
 async def async_setup_platform(hass, config, async_add_entities, discovery_info=None):
     """Primary async setup for YAML configuration."""
-    name = config.get("name") or f"Proxy for {config.get('target', 'unknown')}"
-    target = config["target"]
-    _LOGGER.debug("normalize_lights: async_setup_platform for %s → %s", name, target)
-    async_add_entities([NormalizeProxyLight(hass, name, target)], update_before_add=False)
+    name    = config.get("name") or f"Proxy for {config.get('target', 'unknown')}"
+    target  = config["target"]
+    llv_raw = config.get("llv")
+    hld_raw = config.get("hld")
+    llv = _as_int_or_none(llv_raw)
+    hld = _as_int_or_none(hld_raw)
+    profile = str(config.get("profile", "linear"))
+
+    _LOGGER.debug(
+        "normalize_lights: async_setup_platform for %s → %s (llv=%s, hld=%s, profile=%s)",
+        name, target, llv, hld, profile
+    )
+
+    async_add_entities(
+        [NormalizeProxyLight(hass, name, target, llv, hld, profile)],
+        update_before_add=False
+    )
