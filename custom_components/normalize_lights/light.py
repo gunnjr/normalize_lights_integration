@@ -23,7 +23,6 @@ from .engine import virtual_to_actual, actual_to_virtual
 
 _LOGGER = logging.getLogger(__name__)
 
-
 def _clamp(n: Optional[int]) -> int:
     try:
         n = int(n or 0)
@@ -33,7 +32,7 @@ def _clamp(n: Optional[int]) -> int:
 
 
 class NormalizeProxyLight(LightEntity):
-    """A minimal virtual light that proxies another light and mirrors its state."""
+    """A virtual light that proxies another light and mirrors its state (IMT)."""
 
     _attr_supported_color_modes = {ColorMode.BRIGHTNESS}
     _attr_color_mode = ColorMode.BRIGHTNESS
@@ -44,8 +43,10 @@ class NormalizeProxyLight(LightEntity):
         self._attr_name = name
         self._target_entity_id = target_entity
         self._attr_is_on = False
-        self._virtual_brightness = 0  # proxy’s brightness in virtual domain
+        self._virtual_brightness = 0  # proxy's brightness (virtual domain)
         self._unsub_target = None
+        # Stable unique_id prevents duplicate orphaned entities on rename
+        self._attr_unique_id = f"{DOMAIN}:{self._target_entity_id}"
 
     # ---- HA properties ----
     @property
@@ -63,105 +64,116 @@ class NormalizeProxyLight(LightEntity):
 
     # ---- Lifecycle ----
     async def async_added_to_hass(self) -> None:
-        """Subscribe to target light changes and initialize from current state."""
-        # 1) Prime from current target state (if it exists)
+        """Subscribe to target changes and prime local state."""
+        _LOGGER.debug("normalize_lights: async_added_to_hass for %s (target=%s)", self.name, self._target_entity_id)
+
+        # Prime from current target state
         st = self.hass.states.get(self._target_entity_id)
         if st:
+            _LOGGER.debug("normalize_lights: priming from target state: %s", st)
             self._apply_target_state(st)
+        else:
+            _LOGGER.debug("normalize_lights: target state not found at add (%s)", self._target_entity_id)
 
-        # 2) Listen for future changes
+        # Listen for future target state changes
         self._unsub_target = async_track_state_change_event(
             self.hass, [self._target_entity_id], self._handle_target_event
         )
+        _LOGGER.debug("normalize_lights: subscribed to target events for %s", self._target_entity_id)
 
     async def async_will_remove_from_hass(self) -> None:
         if self._unsub_target:
             self._unsub_target()
             self._unsub_target = None
+            _LOGGER.debug("normalize_lights: unsubscribed from target events for %s", self._target_entity_id)
 
-    # ---- Proxy behavior ----
+    # ---- Proxy behavior (proxy -> target) ----
     async def async_turn_on(self, **kwargs) -> None:
-        """Consume absolute/relative brightness in the *virtual* domain, transform, and call the real light."""
-        # Base on current virtual brightness
+        """Accept virtual brightness (absolute/relative), transform, and call the real light."""
         v = self._virtual_brightness
 
-        # Absolute
+        # Absolute first
         if ATTR_BRIGHTNESS in kwargs:
             v = _clamp(kwargs.get(ATTR_BRIGHTNESS))
 
-        # Relative (step takes precedence over pct if both set)
+        # Relative steps (step wins over pct if both supplied)
         if ATTR_BRIGHTNESS_STEP in kwargs:
             v = _clamp(v + int(kwargs[ATTR_BRIGHTNESS_STEP]))
         elif ATTR_BRIGHTNESS_STEP_PCT in kwargs:
             step = int(255 * (int(kwargs[ATTR_BRIGHTNESS_STEP_PCT]) / 100))
             v = _clamp(v + step)
 
-        # Identity transform for now: virtual -> actual
+        # IMT identity transform
         a = virtual_to_actual(v)
-
-        data = {"entity_id": self._target_entity_id}
-        # If turning on without brightness argument and current v==0, choose a small nonzero default
         if a == 0:
-            a = 1  # minimal "on" brightness
-        data[ATTR_BRIGHTNESS] = a
+            a = 1  # ensure we turn the light on
+
+        # Some targets don't support brightness; detect and tailor payload
+        target_state = self.hass.states.get(self._target_entity_id)
+        supports_brightness = True
+        if target_state:
+            # Prefer supported_color_modes check when available
+            scms = target_state.attributes.get("supported_color_modes")
+            if isinstance(scms, (set, list)):
+                supports_brightness = ("brightness" in scms) or (ColorMode.BRIGHTNESS in scms)
+        service_data = {"entity_id": self._target_entity_id}
+        if supports_brightness:
+            service_data[ATTR_BRIGHTNESS] = a
 
         if ATTR_TRANSITION in kwargs:
-            data[ATTR_TRANSITION] = kwargs[ATTR_TRANSITION]
+            service_data[ATTR_TRANSITION] = kwargs[ATTR_TRANSITION]
 
-        # Call the real light
-        await self.hass.services.async_call("light", "turn_on", data, blocking=False)
+        _LOGGER.debug("normalize_lights → light.turn_on %s", service_data)
+        await self.hass.services.async_call("light", "turn_on", service_data, blocking=True)
 
-        # Optimistic local state (will be corrected by mirror callback if needed)
+        # Optimistic local update; mirror will confirm/correct shortly
         self._virtual_brightness = v
         self._attr_is_on = True
         self.async_write_ha_state()
 
     async def async_turn_off(self, **kwargs) -> None:
-        data = {"entity_id": self._target_entity_id}
+        service_data = {"entity_id": self._target_entity_id}
         if ATTR_TRANSITION in kwargs:
-            data[ATTR_TRANSITION] = kwargs[ATTR_TRANSITION]
+            service_data[ATTR_TRANSITION] = kwargs[ATTR_TRANSITION]
 
-        await self.hass.services.async_call("light", "turn_off", data, blocking=False)
+        _LOGGER.debug("normalize_lights → light.turn_off %s", service_data)
+        await self.hass.services.async_call("light", "turn_off", service_data, blocking=True)
 
-        # Optimistic local state
         self._attr_is_on = False
         self._virtual_brightness = 0
         self.async_write_ha_state()
 
-    # ---- Mirror target -> proxy ----
+    # ---- Mirror (target -> proxy) ----
     async def _handle_target_event(self, event) -> None:
-        """State change event handler for the target light."""
         new_state: Optional[State] = event.data.get("new_state")
         if new_state:
+            _LOGGER.debug("normalize_lights: target state changed: %s", new_state)
             self._apply_target_state(new_state)
             self.async_write_ha_state()
 
     def _apply_target_state(self, state: State) -> None:
-        """Map target (actual) -> proxy (virtual), identity for now."""
         is_on = (state.state or "").lower() == "on"
         self._attr_is_on = is_on
 
         a = state.attributes.get(ATTR_BRIGHTNESS)
         if a is None:
-            # If the device doesn't report brightness, just mirror on/off
+            # Device doesn't expose brightness; mirror on/off only
             self._virtual_brightness = 255 if is_on else 0
             return
 
-        # Identity transform for now: actual -> virtual
         v = actual_to_virtual(a)
         self._virtual_brightness = v
 
 
-# -------------------------------------------------------------------
-# YAML Setup Hooks (platform mode for IMT)
-# -------------------------------------------------------------------
+# ---- YAML Setup Hooks (platform mode for IMT) ----
 def setup_platform(hass, config, add_entities, discovery_info=None):
     """Sync wrapper for legacy YAML setup."""
+    _LOGGER.debug("normalize_lights: setup_platform shim called with config=%s", config)
     hass.async_create_task(async_setup_platform(hass, config, add_entities, discovery_info))
-
 
 async def async_setup_platform(hass, config, async_add_entities, discovery_info=None):
     """Primary async setup for YAML configuration."""
     name = config.get("name") or f"Proxy for {config.get('target', 'unknown')}"
     target = config["target"]
+    _LOGGER.debug("normalize_lights: async_setup_platform for %s → %s", name, target)
     async_add_entities([NormalizeProxyLight(hass, name, target)], update_before_add=False)
