@@ -40,6 +40,8 @@ def _as_int_or_none(v):
         return None  # if it's not a valid integer, ignore it
 
 class NormalizeProxyLight(LightEntity):
+    _attr_has_entity_name = True  # allow HA to derive entity_id from name if no suggestion
+
     """A virtual light that proxies another light and mirrors its state (IMT)."""
 
     _attr_supported_color_modes = {ColorMode.BRIGHTNESS}
@@ -47,7 +49,7 @@ class NormalizeProxyLight(LightEntity):
     _attr_should_poll = False
 
 
-    def __init__(self, hass, name, target_entity, llv=None, hld=None, profile="linear") -> None:
+    def __init__(self, hass, name, target_entity, llv=None, hld=None, profile="linear", unique_id: str | None = None ) -> None:
         self.hass = hass
         self._attr_name = name
         self._target_entity_id = target_entity
@@ -66,14 +68,14 @@ class NormalizeProxyLight(LightEntity):
         return self._virtual_brightness if self._attr_is_on else None
 
     @property
-    def device_info(self) -> DeviceInfo:
-        return DeviceInfo(
-            identifiers={(DOMAIN, f"proxy_{self._target_entity_id}")},
-            name=f"{TITLE} Proxy",
-            manufacturer="Community",
-            model="NormalizeProxyLight",
-        )
-
+    def device_info(self):
+        """Show this proxy as its own device with the proxy's name."""
+        return {
+            "identifiers": {("normalize_lights", self._attr_unique_id)},
+            "name": self._attr_name,
+            "manufacturer": "Community",
+            "model": "NormalizeProxyLight",
+        }
     # ---- Lifecycle ----
     async def async_added_to_hass(self) -> None:
         """Subscribe to target changes and prime local state."""
@@ -207,9 +209,32 @@ async def async_setup_platform(hass, config, async_add_entities, discovery_info=
 # Home Assistant calls this automatically when a ConfigEntry for this integration is added or reloaded.
 # It should instantiate and register NormalizeProxyLight entities based on entry data.    
 async def async_setup_entry(hass, entry, async_add_entities):
-    data = entry.data | entry.options
-    name = data.get("name")
-    target = data.get("target")
-    llv = data.get("llv")
-    hld = data.get("hld")
-    async_add_entities([NormalizeProxyLight(hass, name, target, llv, hld)])
+    data = {**entry.data, **entry.options}
+    name = data["name"]
+    target = data["target"]
+    llv = int(data.get("llv", 0))
+    hld = int(data.get("hld", 255))
+    profile = data.get("profile", "linear")
+    suggested = data.get("proxy_object_id")  # may be None/empty
+
+    # If you use a persisted UUID helper, keep it; otherwise fallback is fine.
+    # unique_id = await ensure_unique_id_for_proxy(hass, entry, target)
+    unique_id = f"{DOMAIN}:{entry.entry_id}"
+
+    ent = NormalizeProxyLight(
+        hass=hass,
+        name=name,
+        target_entity=target,
+        llv=llv,
+        hld=hld,
+        profile=profile,
+        unique_id=unique_id,
+    )
+    # Suggest the initial entity_id if we have one (only takes effect on first create)
+    if suggested:
+        try:
+            ent._suggested_object_id = suggested  # noqa: SLF001 (IMT allowed)
+        except Exception:
+            pass
+
+    async_add_entities([ent], update_before_add=False)

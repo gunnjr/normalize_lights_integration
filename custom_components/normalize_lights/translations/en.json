@@ -3,10 +3,11 @@
     "step": {
       "user": {
         "title": "Create a Proxy Light",
-        "description": "Configure a Normalize Lights proxy for an existing light.",
+        "description": "Target a real light, choose an entity ID for the proxy, and set LLV/HLD.\n\nLLV/HLD: {llv_help}",
         "data": {
-          "name": "Proxy Name",
-          "target": "Target Light Entity ID",
+          "target": "Target Light",
+          "proxy_object_id": "Proxy entity ID (suggested; editable)",
+          "name": "Proxy name (optional)",
           "llv": "Lowest Visible Level",
           "hld": "Highest Dimmed Level",
           "profile": "Profile"
@@ -16,7 +17,8 @@
     "error": {
       "llv_gt_hld": "Lowest level must be less than or equal to highest level.",
       "target_in_use": "That target light already has a proxy defined.",
-      "bad_level": "Enter a percentage (e.g., 35 or 35%) or a raw value 0–255."
+      "bad_level": "Enter a percentage (e.g., 35 or 35%) or a raw value 0–255.",
+      "target_is_proxy": "Select a real (non-proxy) light."
     },
     "create_entry": {
       "default": "Proxy created successfully!"
