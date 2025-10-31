@@ -13,7 +13,8 @@ import voluptuous as vol
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
-PROFILE_OPTIONS = ["linear"]  # reserved for future curves
+# Note: Profile selection is disabled for v1 - linear mapping only
+# PROFILE_OPTIONS = ["linear"]  # reserved for future curves
 
 
 def _parse_level(value: Any) -> int | None:
@@ -119,7 +120,6 @@ class NormalizeLightsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             proxy_object_id_in: str = (user_input.get("proxy_object_id") or "").strip()
             name_in: str = (user_input.get("name") or "").strip()
-            profile: str = user_input["profile"]
 
             # Convert LLV/HLD into 0..255
             llv = _parse_level(user_input["llv"])
@@ -131,7 +131,8 @@ class NormalizeLightsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors["base"] = "llv_gt_hld"
 
             if not errors:
-                name = name_in or suggested_name
+                # Use custom name if provided, otherwise leave None for auto-generation
+                name = name_in if name_in else None
                 proxy_object_id = proxy_object_id_in or suggested_object_id
                 _LOGGER.debug("normalize_lights: final values - name: %s, proxy_object_id: %s (input: %s, suggested: %s)", 
                              name, proxy_object_id, proxy_object_id_in, suggested_object_id)
@@ -142,25 +143,26 @@ class NormalizeLightsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     "proxy_object_id": proxy_object_id,
                     "llv": llv,
                     "hld": hld,
-                    "profile": profile,
+                    "profile": "linear",  # Fixed value for v1
                 }
                 _LOGGER.debug("normalize_lights: creating config entry with data: %s", data)
-                return self.async_create_entry(title=name, data=data)
+                # Use custom name for config entry title, or fall back to suggested name
+                entry_title = name if name else suggested_name
+                return self.async_create_entry(title=entry_title, data=data)
 
         # Show configuration form with pre-populated defaults
         return self.async_show_form(
             step_id="configure",
             data_schema=vol.Schema({
+                vol.Optional("name", default=""): str,  # Leave blank by default
                 vol.Optional("proxy_object_id", default=suggested_object_id): str,
-                vol.Optional("name", default=suggested_name): str,
-                vol.Required("llv", default="0"): str,
-                vol.Required("hld", default="255"): str,
-                vol.Required("profile", default="linear"): vol.In(PROFILE_OPTIONS),
+                vol.Required("llv", default="17%"): str,
+                vol.Required("hld", default="94%"): str,
             }),
             errors=errors,
             description_placeholders={
                 "target_entity": self.target_entity,
-                "llv_help": "Enter 1–99% or 1–254 (raw).",
+                "llv_help": "LLV: Minimum brightness that produces visible light (e.g., 17%)\nHLD: Maximum brightness before full intensity (e.g., 94%)\n\nAccepts percentages (17%) or raw values (0-255)",
             },
         )
 

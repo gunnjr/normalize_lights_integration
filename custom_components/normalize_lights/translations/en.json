@@ -9,25 +9,24 @@
         }
       },
       "configure": {
-        "title": "Configure Proxy Light",
-        "description": "Configure your normalized light proxy for {target_entity}.\n\nThe suggested name and entity ID can be customized.\n\nLLV/HLD: {llv_help}",
+        "title": "Configure Normalized Light",
+        "description": "Configure brightness normalization for {target_entity}.\n\n{llv_help}",
         "data": {
-          "proxy_object_id": "Entity ID (suggested)",
-          "name": "Display Name (suggested)",
-          "llv": "Lowest Visible Level",
-          "hld": "Highest Dimmed Level",
-          "profile": "Profile"
+          "name": "Friendly Name (optional)",
+          "proxy_object_id": "Entity ID",
+          "llv": "Lowest Visible Level (LLV)",
+          "hld": "Highest Level Still Dimmed (HLD)"
         }
       }
     },
     "error": {
-      "llv_gt_hld": "Lowest level must be less than or equal to highest level.",
-      "target_in_use": "That target light already has a proxy defined.",
-      "bad_level": "Enter a percentage (e.g., 35 or 35%) or a raw value 0–255.",
+      "llv_gt_hld": "LLV must be less than or equal to HLD.",
+      "target_in_use": "That target light already has a normalized proxy.",
+      "bad_level": "Enter a percentage (e.g., 17% or 94%) or a raw value 0–255.",
       "target_is_proxy": "Select a real (non-proxy) light."
     },
     "create_entry": {
-      "default": "Proxy created successfully!"
+      "default": "Normalized light created successfully!"
     }
   }
 }
