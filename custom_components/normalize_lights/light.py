@@ -209,6 +209,8 @@ async def async_setup_platform(hass, config, async_add_entities, discovery_info=
 # Home Assistant calls this automatically when a ConfigEntry for this integration is added or reloaded.
 # It should instantiate and register NormalizeProxyLight entities based on entry data.    
 async def async_setup_entry(hass, entry, async_add_entities):
+    from homeassistant.helpers import entity_registry as er
+    
     data = {**entry.data, **entry.options}
     name = data["name"]
     target = data["target"]
@@ -222,6 +224,34 @@ async def async_setup_entry(hass, entry, async_add_entities):
     # Use domain-prefixed ConfigEntry UUID for stable, unique identification
     unique_id = f"{DOMAIN}:{entry.entry_id}"
 
+    # Check if entity already exists in registry
+    registry = er.async_get(hass)
+    existing_entity = registry.async_get_entity_id("light", DOMAIN, unique_id)
+    
+    if existing_entity:
+        _LOGGER.debug("normalize_lights: entity already exists with ID: %s", existing_entity)
+    elif suggested:
+        # Try to register the entity with our preferred entity_id
+        desired_entity_id = f"light.{suggested}"
+        _LOGGER.debug("normalize_lights: attempting to register entity with desired ID: %s", desired_entity_id)
+        
+        # Check if the desired entity_id is available
+        if not registry.async_get(desired_entity_id):
+            try:
+                # Pre-register the entity with our desired entity_id
+                registry.async_get_or_create(
+                    domain="light",
+                    platform=DOMAIN,
+                    unique_id=unique_id,
+                    suggested_object_id=suggested,
+                    config_entry=entry,
+                )
+                _LOGGER.debug("normalize_lights: pre-registered entity with suggested ID: %s", suggested)
+            except Exception as e:
+                _LOGGER.warning("normalize_lights: failed to pre-register entity: %s", e)
+        else:
+            _LOGGER.debug("normalize_lights: desired entity_id %s is already taken", desired_entity_id)
+
     ent = NormalizeProxyLight(
         hass=hass,
         name=name,
@@ -231,16 +261,5 @@ async def async_setup_entry(hass, entry, async_add_entities):
         profile=profile,
         unique_id=unique_id,
     )
-    
-    # Suggest the initial entity_id if we have one (only takes effect on first create)
-    if suggested:
-        _LOGGER.debug("normalize_lights: setting _suggested_object_id to: %s", suggested)
-        try:
-            ent._suggested_object_id = suggested  # noqa: SLF001 (IMT allowed)
-            _LOGGER.debug("normalize_lights: _suggested_object_id set successfully")
-        except Exception as e:
-            _LOGGER.error("normalize_lights: failed to set _suggested_object_id: %s", e)
-    else:
-        _LOGGER.debug("normalize_lights: no suggested object_id provided")
 
     async_add_entities([ent], update_before_add=False)
