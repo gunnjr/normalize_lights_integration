@@ -2,12 +2,18 @@
   "config": {
     "step": {
       "user": {
-        "title": "Create a Proxy Light",
-        "description": "Target a real light, choose an entity ID for the proxy, and set LLV/HLD.\n\nLLV/HLD: {llv_help}",
+        "title": "Select Target Light",
+        "description": "Choose the light you want to normalize.",
         "data": {
-          "target": "Target Light",
-          "proxy_object_id": "Proxy entity ID (suggested; editable)",
-          "name": "Proxy name (optional)",
+          "target": "Target Light"
+        }
+      },
+      "configure": {
+        "title": "Configure Proxy Light",
+        "description": "Configure your normalized light proxy for {target_entity}.\n\nThe suggested name and entity ID can be customized.\n\nLLV/HLD: {llv_help}",
+        "data": {
+          "proxy_object_id": "Entity ID (suggested)",
+          "name": "Display Name (suggested)",
           "llv": "Lowest Visible Level",
           "hld": "Highest Dimmed Level",
           "profile": "Profile"

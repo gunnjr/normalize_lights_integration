@@ -60,35 +60,55 @@ def _derive_default_name(hass: HomeAssistant, target: str) -> str:
         base = st.attributes.get("friendly_name") or target.split(".", 1)[-1]
     else:
         base = target.split(".", 1)[-1]
-    return f"{base} Proxy"
+    return f"{base} (Normalized)"
 
 
 def _derive_default_object_id(target: str) -> str:
     return f"{target.split('.', 1)[-1]}_proxy"  # e.g., light.mba_s1_2 -> mba_s1_2_proxy
 
 
-def _schema():
-    # Field order is preserved; target first.
-    return vol.Schema(
-        {
-            vol.Required("target"): sel.selector({"entity": {"domain": "light"}}),
-            vol.Optional("proxy_object_id", default=""): str,  # suggested entity_id suffix (editable)
-            vol.Optional("name", default=""): str,             # display name (optional)
-            vol.Required("llv", default="0"): str,             # accepts % or 0–255
-            vol.Required("hld", default="255"): str,           # accepts % or 0–255
-            vol.Required("profile", default="linear"): vol.In(PROFILE_OPTIONS),
-        }
-    )
-
-
 class NormalizeLightsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
 
+    def __init__(self):
+        """Initialize config flow."""
+        self.target_entity = None
+
     async def async_step_user(self, user_input: dict[str, Any] | None = None):
+        """Handle the initial step - target selection."""
         errors: dict[str, str] = {}
 
         if user_input is not None:
             target: str = user_input["target"].strip()
+            
+            # Validate target is a *non-proxy* light
+            if await self._is_proxy_light(self.hass, target):
+                errors["base"] = "target_is_proxy"
+            elif await self._target_already_proxied(self.hass, target):
+                errors["base"] = "target_in_use"
+            
+            if not errors:
+                self.target_entity = target
+                return await self.async_step_configure()
+
+        # Show target selection form
+        return self.async_show_form(
+            step_id="user",
+            data_schema=vol.Schema({
+                vol.Required("target"): sel.selector({"entity": {"domain": "light"}}),
+            }),
+            errors=errors,
+        )
+
+    async def async_step_configure(self, user_input: dict[str, Any] | None = None):
+        """Handle the configuration step with auto-populated defaults."""
+        errors: dict[str, str] = {}
+
+        # Generate defaults based on selected target
+        suggested_name = _derive_default_name(self.hass, self.target_entity)
+        suggested_object_id = _derive_default_object_id(self.target_entity)
+
+        if user_input is not None:
             proxy_object_id_in: str = (user_input.get("proxy_object_id") or "").strip()
             name_in: str = (user_input.get("name") or "").strip()
             profile: str = user_input["profile"]
@@ -97,37 +117,39 @@ class NormalizeLightsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             llv = _parse_level(user_input["llv"])
             hld = _parse_level(user_input["hld"])
 
-            # Validate target is a *non-proxy* light
-            if await self._is_proxy_light(self.hass, target):
-                errors["base"] = "target_is_proxy"
-
             if llv is None or hld is None:
                 errors["base"] = "bad_level"
             elif llv > hld:
                 errors["base"] = "llv_gt_hld"
-            elif await self._target_already_proxied(self.hass, target):
-                errors["base"] = "target_in_use"
 
             if not errors:
-                name = name_in or _derive_default_name(self.hass, target)
-                proxy_object_id = proxy_object_id_in or _derive_default_object_id(target)
+                name = name_in or suggested_name
+                proxy_object_id = proxy_object_id_in or suggested_object_id
 
                 data = {
                     "name": name,
-                    "target": target,
-                    "proxy_object_id": proxy_object_id,  # used to suggest entity_id
-                    "llv": llv,   # stored as 0–255
-                    "hld": hld,   # stored as 0–255
+                    "target": self.target_entity,
+                    "proxy_object_id": proxy_object_id,
+                    "llv": llv,
+                    "hld": hld,
                     "profile": profile,
                 }
                 return self.async_create_entry(title=name, data=data)
 
+        # Show configuration form with pre-populated defaults
         return self.async_show_form(
-            step_id="user",
-            data_schema=_schema(),
+            step_id="configure",
+            data_schema=vol.Schema({
+                vol.Optional("proxy_object_id", default=suggested_object_id): str,
+                vol.Optional("name", default=suggested_name): str,
+                vol.Required("llv", default="0"): str,
+                vol.Required("hld", default="255"): str,
+                vol.Required("profile", default="linear"): vol.In(PROFILE_OPTIONS),
+            }),
             errors=errors,
             description_placeholders={
-                "llv_help": "Enter 1–99% or 1–254 (raw).",  # shown via translations description
+                "target_entity": self.target_entity,
+                "llv_help": "Enter 1–99% or 1–254 (raw).",
             },
         )
 

@@ -56,8 +56,8 @@ class NormalizeProxyLight(LightEntity):
         self._attr_is_on = False
         self._virtual_brightness = 0  # proxy's brightness (virtual domain)
         self._unsub_target = None
-        # Stable unique_id prevents duplicate orphaned entities on rename
-        self._attr_unique_id = f"{DOMAIN}:{self._target_entity_id}"
+        # Use provided unique_id (typically domain:entry_id) or fallback to target-based
+        self._attr_unique_id = unique_id or f"{DOMAIN}:{self._target_entity_id}"
         self._llv = llv
         self._hld = hld
         self._profile = profile
@@ -217,8 +217,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
     profile = data.get("profile", "linear")
     suggested = data.get("proxy_object_id")  # may be None/empty
 
-    # If you use a persisted UUID helper, keep it; otherwise fallback is fine.
-    # unique_id = await ensure_unique_id_for_proxy(hass, entry, target)
+    # Use domain-prefixed ConfigEntry UUID for stable, unique identification
     unique_id = f"{DOMAIN}:{entry.entry_id}"
 
     ent = NormalizeProxyLight(
