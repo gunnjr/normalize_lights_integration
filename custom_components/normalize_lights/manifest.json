@@ -1,7 +1,7 @@
 {
   "domain": "normalize_lights",
   "name": "Normalize Lights",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "documentation": "https://github.com/gunnjr/normalize_lights_integration",
   "issue_tracker": "https://github.com/gunnjr/normalize_lights_integration/issues",
   "codeowners": ["@gunnjr"],
