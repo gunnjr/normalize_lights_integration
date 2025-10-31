@@ -1,6 +1,7 @@
 # custom_components/normalize_lights/config_flow.py
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from homeassistant import config_entries
@@ -11,6 +12,7 @@ import voluptuous as vol
 
 from .const import DOMAIN
 
+_LOGGER = logging.getLogger(__name__)
 PROFILE_OPTIONS = ["linear"]  # reserved for future curves
 
 
@@ -76,21 +78,27 @@ class NormalizeLightsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None):
         """Handle the initial step - target selection."""
+        _LOGGER.debug("normalize_lights: async_step_user called with input: %s", user_input)
         errors: dict[str, str] = {}
 
         if user_input is not None:
             target: str = user_input["target"].strip()
+            _LOGGER.debug("normalize_lights: validating target: %s", target)
             
             # Validate target is a *non-proxy* light
             if await self._is_proxy_light(self.hass, target):
+                _LOGGER.debug("normalize_lights: target is proxy light")
                 errors["base"] = "target_is_proxy"
             elif await self._target_already_proxied(self.hass, target):
+                _LOGGER.debug("normalize_lights: target already has proxy")
                 errors["base"] = "target_in_use"
             
             if not errors:
+                _LOGGER.debug("normalize_lights: target validation passed, proceeding to configure step")
                 self.target_entity = target
                 return await self.async_step_configure()
 
+        _LOGGER.debug("normalize_lights: showing target selection form")
         # Show target selection form
         return self.async_show_form(
             step_id="user",
