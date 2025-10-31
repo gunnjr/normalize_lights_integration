@@ -217,6 +217,8 @@ async def async_setup_entry(hass, entry, async_add_entities):
     profile = data.get("profile", "linear")
     suggested = data.get("proxy_object_id")  # may be None/empty
 
+    _LOGGER.debug("normalize_lights: async_setup_entry - name=%s, target=%s, suggested=%s", name, target, suggested)
+
     # Use domain-prefixed ConfigEntry UUID for stable, unique identification
     unique_id = f"{DOMAIN}:{entry.entry_id}"
 
@@ -229,11 +231,16 @@ async def async_setup_entry(hass, entry, async_add_entities):
         profile=profile,
         unique_id=unique_id,
     )
+    
     # Suggest the initial entity_id if we have one (only takes effect on first create)
     if suggested:
+        _LOGGER.debug("normalize_lights: setting _suggested_object_id to: %s", suggested)
         try:
             ent._suggested_object_id = suggested  # noqa: SLF001 (IMT allowed)
-        except Exception:
-            pass
+            _LOGGER.debug("normalize_lights: _suggested_object_id set successfully")
+        except Exception as e:
+            _LOGGER.error("normalize_lights: failed to set _suggested_object_id: %s", e)
+    else:
+        _LOGGER.debug("normalize_lights: no suggested object_id provided")
 
     async_add_entities([ent], update_before_add=False)

@@ -133,6 +133,8 @@ class NormalizeLightsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             if not errors:
                 name = name_in or suggested_name
                 proxy_object_id = proxy_object_id_in or suggested_object_id
+                _LOGGER.debug("normalize_lights: final values - name: %s, proxy_object_id: %s (input: %s, suggested: %s)", 
+                             name, proxy_object_id, proxy_object_id_in, suggested_object_id)
 
                 data = {
                     "name": name,
@@ -142,6 +144,7 @@ class NormalizeLightsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     "hld": hld,
                     "profile": profile,
                 }
+                _LOGGER.debug("normalize_lights: creating config entry with data: %s", data)
                 return self.async_create_entry(title=name, data=data)
 
         # Show configuration form with pre-populated defaults
